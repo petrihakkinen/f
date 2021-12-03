@@ -1,40 +1,9 @@
 #!lua
 
---[[
-
-Simple Forth interpreter that can be used as a commandline calculator
-
-Disabling * wildcard expansion:
-run this in shell (could be placed in bash init file?):
-alias f='set -f;f';f(){ ~/code/f/f.lua "$@";set +f;}
-this creates an alias so f can now be invoked like this: f 2 3 *
-
-Examples:
-
-> f ascii *    ( prints the ascii value of * )
-42
-
-> f 1024 hex   ( converts 1024 (dec) to hex )
-400
-
-> f hex 1000 decimal ( converts 1000 (hex) to decimal )
-4096
-
-> f 5 '>' 8  ( < and > have to be enclosed in quotes because they have special meaning in shell )
-0
-
-> f : square dup * ;  ( ; at the end is optional because ; is eliminated by shell )
-OK
-
-( : checks errors in the input by compiling it, appends the input as a new line to .f and prints OK )
-
-> cat .f
-: square dup * ;
-
-> f 5 square
-25  ( the file .f is loaded in by f, so all previously defined words can be used )
-
---]]
+-- Disabling * wildcard expansion:
+-- run this in shell (could be placed in bash init file?):
+-- alias f='set -f;f';f(){ ~/code/f/f.lua "$@";set +f;}
+-- this creates an alias so f can now be invoked like this: f 2 3 *
 
 local input = table.concat({...}, " ")
 local cur_pos = 1				-- current position in input buffer
@@ -52,7 +21,7 @@ CBRANCH = {}
 LOOP = {}
 RET = {}
 
-print("input: " .. input)
+--print("input: " .. input)
 
 function printf(...)
 	print(string.format(...))
@@ -360,6 +329,7 @@ interpret_dict = {
 	BASE = function() push(0) end,
 	HEX = function() mem[0] = 16 end,
 	DECIMAL = function() mem[0] = 10 end,
+	PI = function() push(math.pi) end,
 	I = function() push(r_peek(-1)) end,
 	LOAD = function()
 		local filename = next_symbol()

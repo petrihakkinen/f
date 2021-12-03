@@ -1,0 +1,10 @@
+- add new words to .f
+
+- allow using control flow words outside colon definitions?
+
+- what frequently used words are still missing?
+
+- format negative hex values as two's complement
+
+- add alias for disabling shell substitution of *
+
