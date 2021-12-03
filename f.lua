@@ -38,10 +38,19 @@ OK
 
 local input = table.concat({...}, " ")
 local cur_pos = 1				-- current position in input buffer
+local cur_line = 1
 local compile_mode = false		-- interpret or compile mode?
 local stack = {}
+local return_stack = {}			-- this is not actually used for execution, just for standard forth words
 local mem = { [0] = 10 }
 local dictionary = {}			-- where user defined words are compiled into
+
+-- internal words which are only available in compiled code
+LIT = {}
+BRANCH = {}
+CBRANCH = {}
+LOOP = {}
+RET = {}
 
 print("input: " .. input)
 
@@ -65,7 +74,7 @@ end
 
 function pop()
 	local v = stack[#stack]
-	assert(v, "stack underflow")
+	assert(v, "stack empty!")
 	stack[#stack] = nil
 	return v
 end
@@ -78,12 +87,12 @@ end
 
 function peek(idx)
 	local v = stack[#stack + idx + 1]
-	assert(v, "stack underflow")
+	assert(v, "stack empty!")
 	return v
 end
 
 function remove(idx)
-	assert(stack[#stack + idx + 1], "stack underflow")
+	assert(stack[#stack + idx + 1], "stack underflow!")
 	table.remove(stack, #stack + idx + 1)
 end
 
@@ -91,6 +100,23 @@ function peek_char()
 	local char = input:sub(cur_pos, cur_pos)
 	if #char == 0 then char = nil end
 	return char
+end
+
+function r_push(value)
+	return_stack[#return_stack + 1] = value
+end
+
+function r_pop()
+	local v = return_stack[#return_stack]
+	assert(v, "return stack empty!")
+	return_stack[#return_stack] = nil
+	return v
+end
+
+function r_peek(idx)
+	local v = return_stack[#return_stack + idx + 1]
+	assert(v, "return stack underflow!")
+	return v
 end
 
 -- Dictionary
@@ -119,13 +145,13 @@ function next_char()
 end
 
 -- Returns the next symbol from input. Returns nil at end of input.
-function next_symbol(delimiter)
-	delimiter = delimiter or " "
+function next_symbol(delimiters)
+	delimiters = delimiters or "[ \n\t]"
 
 	-- skip leading delimiters
 	while true do
 		local char = peek_char()
-		if char == delimiter then
+		if char and string.match(char, delimiters) then
 			next_char()
 		else
 			break
@@ -139,7 +165,7 @@ function next_symbol(delimiter)
 	local start = cur_pos
 	while true do
 		local char = next_char()
-		if char == delimiter or char == nil then
+		if char == nil or string.match(char, delimiters) then
 			return input:sub(start, cur_pos - 2)
 		end
 	end
@@ -166,6 +192,8 @@ function format_number(n)
 
 		local digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 		local result = ""
+
+		if n == 0 then return "0" end
 
 		local neg
 		if n < 0 then
@@ -195,6 +223,47 @@ function parse_number(str)
 	return tonumber(str, base)
 end
 
+-- Execution
+
+-- Executes word at given address in dictionary.
+function execute(addr)
+	local function fetch()
+		local instr = dictionary[addr]
+		addr = addr + 1
+		return instr
+	end
+
+	while true do
+		local instr = fetch()
+		--print(instr)
+		if instr == LIT then
+			push(fetch())
+		elseif instr == BRANCH then
+			local offset = fetch()
+			addr = addr + offset
+		elseif instr == CBRANCH then
+			local offset = fetch()
+			if pop() == 0 then
+				addr = addr + offset
+			end
+		elseif instr == LOOP then
+			local offset = fetch()
+			local step = pop()
+			local counter = r_pop() + step
+			local limit = r_pop()
+			if (step >= 0 and counter < limit) or (step < 0 and counter > limit) then
+				r_push(limit)
+				r_push(counter)
+				addr = addr + offset
+			end
+		elseif instr == RET then
+			return
+		else
+			interpret_dict[instr]()
+		end
+	end
+end
+
 -- Built-in words
 
 interpret_dict = {
@@ -203,7 +272,7 @@ interpret_dict = {
 	end,
 	['('] = function()
 		-- skip block comment
-		next_symbol(")")
+		next_symbol("%)")
 	end,
 	[']'] = function()
 		assert(compile_mode, "] without matching [")
@@ -234,7 +303,18 @@ interpret_dict = {
 		push(mem[addr] or 0)
 	end,
 	[':'] = function()
+		local name = string.upper(next_symbol())
+		local start_offset = here()
 		compile_mode = true
+		interpret_dict[name] = function()
+			execute(start_offset)
+		end
+	end,
+	['>R'] = function()
+		r_push(pop())
+	end,
+	['R>'] = function()
+		push(r_pop())
 	end,
 	CONST = function()
 		local name = next_symbol()
@@ -242,7 +322,7 @@ interpret_dict = {
 
 		-- add compile time word which emits the constant as literal
 		compile_dict[name] = function()
-			emit('lit')
+			emit(LIT)
 			emit(value)
 		end
 
@@ -280,6 +360,16 @@ interpret_dict = {
 	BASE = function() push(0) end,
 	HEX = function() mem[0] = 16 end,
 	DECIMAL = function() mem[0] = 10 end,
+	I = function() push(r_peek(-1)) end,
+	LOAD = function()
+		local filename = next_symbol()
+		local file = assert(io.open(filename, "r"))
+		local code = file:read("a")
+		file:close()
+		input = code .. " " .. input:sub(cur_pos)
+		cur_pos = 1
+		cur_line = 1
+	end,
 }
 
 compile_dict = {
@@ -287,6 +377,7 @@ compile_dict = {
 		error("invalid :")
 	end,
 	[';'] = function()
+		emit(RET)
 		compile_mode = false
 	end,
 	['('] = interpret_dict['('],
@@ -296,7 +387,7 @@ compile_dict = {
 	end,
 	IF = function()
 		-- emit conditional branch
-		emit('?branch')
+		emit(CBRANCH)
 		push(here())
 		push('if')
 		emit(0)	-- placeholder branch offset
@@ -305,7 +396,7 @@ compile_dict = {
 		assert(pop() == 'if', "ELSE without matching IF")
 		local where = pop()
 		-- emit jump to THEN
-		emit('branch')
+		emit(BRANCH)
 		push(here())
 		push('if')
 		emit(0)	-- placeholder branch offset
@@ -325,45 +416,50 @@ compile_dict = {
 	UNTIL = function()
 		assert(pop() == 'begin', "UNTIL without matching BEGIN")
 		local target = pop()
-		emit('?branch')
+		emit(CBRANCH)
 		emit(target - here() - 1)
 	end,
 	AGAIN = function()
 		assert(pop() == 'begin', "AGAIN without matching BEGIN")
 		local target = pop()
-		emit('branch')
+		emit(BRANCH)
 		emit(target - here() - 1)
 	end,
 	DO = function()
-		emit('do')
+		emit('SWAP')
+		emit('>R')	-- limit to return stack
+		emit('>R')	-- loop counter to return stack
 		push(here())
 		push('do')
 	end,
 	LOOP = function()
 		assert(pop() == 'do', "LOOP without matching DO")
 		local target = pop()
-		emit('loop')
+		emit(LIT)
+		emit(1)
+		emit(LOOP)
 		emit(target - here() - 1)		
 	end,
 	["+LOOP"] = function()
 		assert(pop() == 'do', "+LOOP without matching DO")
 		local target = pop()
-		emit('+loop')
+		emit(LOOP)
 		emit(target - here() - 1)		
 	end,
 	ASCII = function()
 		local char = next_symbol()
 		if #char ~= 1 then error("invalid symbol following ASCII") end
-		emit('lit')
+		emit(LIT)
 		emit(char:byte(1))
 	end,
 }
 
--- TODO: execute init file
--- local file, err = io.open(filename, "r")
--- if file == nil then print(err); os.exit(-1) end
--- input = file:read("a")
--- file:close()
+-- load init file
+local file, err = io.open(".f", "r")
+if file then
+	input = file:read("a") .. "\n" .. input
+	file:close()
+end
 
 -- execute input
 while true do
@@ -376,11 +472,16 @@ while true do
 		-- compile mode
 		local func = compile_dict[sym]
 		if func == nil then
-			-- is it a number?
 			local n = parse_number(sym)
-			if n == nil then errorf("undefined word '%s'", sym) end
-			emit('lit')
-			emit(n)
+			local w = interpret_dict[sym]
+			if n then -- is it a number?
+				emit(LIT)
+				emit(n)
+			elseif w then -- is it a word?
+				emit(sym)
+			else
+				errorf("undefined word '%s'", sym)
+			end
 		else
 			func()
 		end
