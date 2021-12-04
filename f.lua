@@ -182,7 +182,11 @@ end
 function parse_number(str)
 	local base = mem[0]
 	assert(base >= 2 and base <= 36, "invalid numeric base")
-	return tonumber(str, base)
+	if base == 10 then
+		return tonumber(str)
+	else
+		return tonumber(str, base)
+	end
 end
 
 -- Compilation & Execution
@@ -319,26 +323,33 @@ dict = {
 		local addr = pop()
 		push(mem[addr] or 0)
 	end,
+	CREATE = function()
+		local name = string.upper(next_symbol())
+		local addr = here()
+		dict[name] = function()
+			push(addr)
+		end
+	end,
 	[':'] = function()
 		assert(not compile_mode, ": cannot be used inside colon definition")
 		colon_pos = cur_pos
 		local name = string.upper(next_symbol())
-		local start_offset = here()
+		local addr = here()
 		compile_mode = true
 		dict[name] = function()
 			if pc > 0 then
 				-- call another word when executing compiled word
 				r_push(pc)
-				pc = start_offset
+				pc = addr
 			else
 				-- call compiled word from interpreter
-				execute(start_offset)
+				execute(addr)
 			end
 		end
 	end,
 	[';'] = function()
 		check_compile_mode(";")
-		emit('ret')
+		emit('RET')
 		compile_mode = false
 	end,
 	['>R'] = function()
@@ -423,6 +434,7 @@ dict = {
 			push(char:byte(1))
 		end
 	end,
+	HERE = function() push(here()) end,
 	BASE = function() push(0) end,
 	HEX = function() mem[0] = 16 end,
 	DECIMAL = function() mem[0] = 10 end,
@@ -430,6 +442,7 @@ dict = {
 	FALSE = function() push(0) end,
 	PI = function() push(math.pi) end,
 	I = function() push(r_peek(-1)) end,
+	J = function() push(r_peek(-3)) end,
 	LOAD = function()
 		local filename = next_symbol()
 		local file = assert(io.open(filename, "r"))
@@ -522,6 +535,17 @@ dict = {
 		emit('loop')
 		emit(target - here() - 1)		
 	end,
+	LIT = function()
+		emit('lit')
+		emit(pop())
+	end,
+	RET = function()
+		if #return_stack > 0 then
+			pc = r_pop()
+		else
+			pc = 0
+		end
+	end,
 
 	-- internal words, these are in lowercase so they are not accessible from user code
 
@@ -547,13 +571,6 @@ dict = {
 			r_push(limit)
 			r_push(counter)
 			pc = pc + offset
-		end
-	end,
-	ret = function()
-		if #return_stack > 0 then
-			pc = r_pop()
-		else
-			pc = 0
 		end
 	end,
 }
