@@ -7,13 +7,13 @@
 
 local input = table.concat({...}, " ")
 local cur_pos = 1				-- current position in input buffer
-local cur_line = 1
+local cur_line = 1				-- not really used
 local compile_mode = false		-- interpret or compile mode?
 local stack = {}
-local return_stack = {}			-- this is not actually used for execution, just for standard forth words
-local mem = { [0] = 10 }
-local dictionary = {}			-- where user defined words are compiled into
-local pc = 0					-- program counter for execute()
+local return_stack = {}
+local mem = { [0] = 10 }		-- work space for user words
+local program_mem = {}			-- where user defined words are compiled into
+local pc = 0					-- program counter for executing compiled code
 
 --print("input: " .. input)
 
@@ -23,6 +23,14 @@ end
 
 function errorf(...)
 	error(string.format(...), 2)
+end
+
+function make_set(t)
+	local set = {}
+	for _, v in pairs(t) do
+		set[v] = true
+	end
+	return set
 end
 
 -- Stack
@@ -80,21 +88,6 @@ function r_peek(idx)
 	local v = return_stack[#return_stack + idx + 1]
 	assert(v, "return stack underflow!")
 	return v
-end
-
--- Dictionary
-
-function here()
-	return #dictionary + 1
-end
-
-function emit(value)
-	table.insert(dictionary, value)
-end
-
-function patch(offset, value)
-	assert(dictionary[offset], "invalid dictionary offset")
-	dictionary[offset] = value
 end
 
 -- Parsing
@@ -186,21 +179,35 @@ function parse_number(str)
 	return tonumber(str, base)
 end
 
--- Execution
+-- Compilation & Execution
+
+function here()
+	return #program_mem + 1
+end
+
+function emit(value)
+	table.insert(program_mem, value)
+end
+
+function check_compile_mode(word)
+	if not compile_mode then
+		errorf(word .. " may only be used inside colon definitions")
+	end
+end
 
 function fetch()
-	local instr = dictionary[pc]
+	local instr = program_mem[pc]
 	pc = pc + 1
 	return instr
 end
 
--- Executes word at given address in dictionary.
+-- Executes a compiled word at given address in program memory.
 function execute(addr)
 	pc = addr
 
 	while pc > 0 do
 		local instr = fetch()
-		local func = interpret_dict[instr]
+		local func = dict[instr]
 		if func == nil then
 			errorf("trying to execute undefined word %s", tostring(instr))
 		end
@@ -210,7 +217,11 @@ end
 
 -- Built-in words
 
-interpret_dict = {
+immediate_words = make_set{
+	":", ";", "(", "[", "IF", "ELSE", "THEN", "BEGIN", "UNTIL", "AGAIN", "DO", "LOOP", "+LOOP", "ASCII",
+}
+
+dict = {
 	[','] = function()
 		emit(pop())
 	end,
@@ -218,8 +229,13 @@ interpret_dict = {
 		-- skip block comment
 		next_symbol("%)")
 	end,
+	['['] = function()
+		check_compile_mode('[')
+		-- temporarily fall back to the interpreter
+		compile_mode = false
+	end,
 	[']'] = function()
-		assert(compile_mode, "] without matching [")
+		assert(not compile_mode, "] without matching [")
 		compile_mode = true
 	end,
 	['+'] = function() local a, b = pop2(); push(a + b) end,
@@ -247,12 +263,18 @@ interpret_dict = {
 		push(mem[addr] or 0)
 	end,
 	[':'] = function()
+		assert(not compile_mode, ": cannot be used inside colon definition")
 		local name = string.upper(next_symbol())
 		local start_offset = here()
 		compile_mode = true
-		interpret_dict[name] = function()
+		dict[name] = function()
 			execute(start_offset)
 		end
+	end,
+	[';'] = function()
+		check_compile_mode(";")
+		emit('ret')
+		compile_mode = false
 	end,
 	['>R'] = function()
 		r_push(pop())
@@ -264,15 +286,13 @@ interpret_dict = {
 		local name = next_symbol()
 		local value = pop()
 
-		-- add compile time word which emits the constant as literal
-		compile_dict[name] = function()
-			emit('lit')
-			emit(value)
-		end
-
-		-- add word to interpreter dictionary so that the constant can be used at compile time
-		interpret_dict[name] = function()
-			push(value)
+		dict[name] = function()
+			if compile_mode then
+				emit('lit')
+				emit(value)
+			else
+				push(value)
+			end
 		end
 	end,
 	DUP = function() push(peek(-1)) end,
@@ -299,7 +319,13 @@ interpret_dict = {
 	ASCII = function()
 		local char = next_symbol()
 		if #char ~= 1 then error("invalid symbol following ASCII") end
-		push(char:byte(1))
+
+		if compile_mode then
+			emit('lit')
+			emit(char:byte(1))
+		else
+			push(char:byte(1))
+		end
 	end,
 	BASE = function() push(0) end,
 	HEX = function() mem[0] = 16 end,
@@ -315,8 +341,79 @@ interpret_dict = {
 		cur_pos = 1
 		cur_line = 1
 	end,
+	IF = function()
+		check_compile_mode("IF")
+		-- emit conditional branch
+		emit('?branch')
+		push(here())
+		push('if')
+		emit(0)	-- placeholder branch offset
+	end,
+	ELSE = function()
+		check_compile_mode("ELSE")
+		assert(pop() == 'if', "ELSE without matching IF")
+		local where = pop()
+		-- emit jump to THEN
+		emit('branch')
+		push(here())
+		push('if')
+		emit(0)	-- placeholder branch offset
+		-- patch branch offset for ?branch at IF
+		program_mem[where] = here() - where - 1
+	end,
+	THEN = function()
+		check_compile_mode("THEN")
+		-- patch branch offset for ?branch at IF
+		assert(pop() == 'if', "THEN without matching IF")
+		local where = pop()
+		program_mem[where] = here() - where - 1
+	end,
+	BEGIN = function()
+		check_compile_mode("BEGIN")
+		push(here())
+		push('begin')
+	end,
+	UNTIL = function()
+		check_compile_mode("UNTIL")
+		assert(pop() == 'begin', "UNTIL without matching BEGIN")
+		local target = pop()
+		emit('?branch')
+		emit(target - here() - 1)
+	end,
+	AGAIN = function()
+		check_compile_mode("AGAIN")
+		assert(pop() == 'begin', "AGAIN without matching BEGIN")
+		local target = pop()
+		emit('branch')
+		emit(target - here() - 1)
+	end,
+	DO = function()
+		check_compile_mode("DO")
+		emit('SWAP')
+		emit('>R')	-- limit to return stack
+		emit('>R')	-- loop counter to return stack
+		push(here())
+		push('do')
+	end,
+	LOOP = function()
+		check_compile_mode("LOOP")
+		assert(pop() == 'do', "LOOP without matching DO")
+		local target = pop()
+		emit('lit')
+		emit(1)
+		emit('loop')
+		emit(target - here() - 1)		
+	end,
+	["+LOOP"] = function()
+		check_compile_mode("+LOOP")
+		assert(pop() == 'do', "+LOOP without matching DO")
+		local target = pop()
+		emit('loop')
+		emit(target - here() - 1)		
+	end,
 
 	-- internal words, these are in lowercase so they are not accessible from user code
+
 	lit = function()
 		push(fetch())
 	end,
@@ -346,88 +443,6 @@ interpret_dict = {
 	end,
 }
 
-compile_dict = {
-	[':'] = function()
-		error("invalid :")
-	end,
-	[';'] = function()
-		emit('ret')
-		compile_mode = false
-	end,
-	['('] = interpret_dict['('],
-	['['] = function()
-		-- temporarily fall back to the interpreter
-		compile_mode = false
-	end,
-	IF = function()
-		-- emit conditional branch
-		emit('?branch')
-		push(here())
-		push('if')
-		emit(0)	-- placeholder branch offset
-	end,
-	ELSE = function()
-		assert(pop() == 'if', "ELSE without matching IF")
-		local where = pop()
-		-- emit jump to THEN
-		emit('branch')
-		push(here())
-		push('if')
-		emit(0)	-- placeholder branch offset
-		-- patch branch offset for ?branch at IF
-		patch(where, here() - where - 1)
-	end,
-	THEN = function()
-		-- TODO: patch branch offset for ?branch at IF
-		assert(pop() == 'if', "THEN without matching IF")
-		local where = pop()
-		patch(where, here() - where - 1)
-	end,
-	BEGIN = function()
-		push(here())
-		push('begin')
-	end,
-	UNTIL = function()
-		assert(pop() == 'begin', "UNTIL without matching BEGIN")
-		local target = pop()
-		emit('?branch')
-		emit(target - here() - 1)
-	end,
-	AGAIN = function()
-		assert(pop() == 'begin', "AGAIN without matching BEGIN")
-		local target = pop()
-		emit('branch')
-		emit(target - here() - 1)
-	end,
-	DO = function()
-		emit('SWAP')
-		emit('>R')	-- limit to return stack
-		emit('>R')	-- loop counter to return stack
-		push(here())
-		push('do')
-	end,
-	LOOP = function()
-		assert(pop() == 'do', "LOOP without matching DO")
-		local target = pop()
-		emit('lit')
-		emit(1)
-		emit('loop')
-		emit(target - here() - 1)		
-	end,
-	["+LOOP"] = function()
-		assert(pop() == 'do', "+LOOP without matching DO")
-		local target = pop()
-		emit('loop')
-		emit(target - here() - 1)		
-	end,
-	ASCII = function()
-		local char = next_symbol()
-		if #char ~= 1 then error("invalid symbol following ASCII") end
-		emit('lit')
-		emit(char:byte(1))
-	end,
-}
-
 -- load init file
 local file, err = io.open(".f", "r")
 if file then
@@ -444,24 +459,25 @@ while true do
 
 	if compile_mode then
 		-- compile mode
-		local func = compile_dict[sym]
-		if func == nil then
+		if immediate_words[sym] then
+			-- execute immediate word
+			dict[sym]()
+		else
+			local w = dict[sym]
 			local n = parse_number(sym)
-			local w = interpret_dict[sym]
-			if n then -- is it a number?
+
+			if w then -- is it a word?
+				emit(sym)
+			elseif n then -- is it a number?
 				emit('lit')
 				emit(n)
-			elseif w then -- is it a word?
-				emit(sym)
 			else
 				errorf("undefined word '%s'", sym)
 			end
-		else
-			func()
 		end
 	else
 		-- interpret mode
-		local func = interpret_dict[sym]
+		local func = dict[sym]
 		if func == nil then
 			-- is it a number?
 			local n = parse_number(sym)
@@ -482,4 +498,5 @@ for i, v in ipairs(stack) do
 		io.write(tostring(v))
 	end
 end
-io.write("\n")
+
+if #stack > 0 then io.write("\n") end
