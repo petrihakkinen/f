@@ -11,8 +11,7 @@ local cur_line = 1				-- not really used
 local compile_mode = false		-- interpret or compile mode?
 local stack = {}
 local return_stack = {}
-local mem = { [0] = 10 }		-- work space for user words
-local program_mem = {}			-- where user defined words are compiled into
+local mem = { [0] = 10 }		-- where user defined words and variables reside
 local pc = 0					-- program counter for executing compiled code
 
 --print("input: " .. input)
@@ -182,11 +181,11 @@ end
 -- Compilation & Execution
 
 function here()
-	return #program_mem + 1
+	return #mem + 1
 end
 
 function emit(value)
-	table.insert(program_mem, value)
+	table.insert(mem, value)
 end
 
 function check_compile_mode(word)
@@ -196,7 +195,7 @@ function check_compile_mode(word)
 end
 
 function fetch()
-	local instr = program_mem[pc]
+	local instr = mem[pc]
 	pc = pc + 1
 	return instr
 end
@@ -283,7 +282,7 @@ dict = {
 		push(r_pop())
 	end,
 	CONST = function()
-		local name = next_symbol()
+		local name = string.upper(next_symbol())
 		local value = pop()
 
 		dict[name] = function()
@@ -293,6 +292,16 @@ dict = {
 			else
 				push(value)
 			end
+		end
+	end,
+	VAR = function()
+		assert(not compile_mode, "VAR cannot be used inside colon definition")		
+		local name = string.upper(next_symbol())
+		local addr = here()
+		emit(pop())
+
+		dict[name] = function()
+			push(addr)
 		end
 	end,
 	DUP = function() push(peek(-1)) end,
@@ -359,14 +368,14 @@ dict = {
 		push('if')
 		emit(0)	-- placeholder branch offset
 		-- patch branch offset for ?branch at IF
-		program_mem[where] = here() - where - 1
+		mem[where] = here() - where - 1
 	end,
 	THEN = function()
 		check_compile_mode("THEN")
 		-- patch branch offset for ?branch at IF
 		assert(pop() == 'if', "THEN without matching IF")
 		local where = pop()
-		program_mem[where] = here() - where - 1
+		mem[where] = here() - where - 1
 	end,
 	BEGIN = function()
 		check_compile_mode("BEGIN")
