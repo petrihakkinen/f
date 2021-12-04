@@ -16,6 +16,8 @@ local mem = { [0] = 10 }		-- where user defined words and variables reside
 local pc = 0					-- program counter for executing compiled code
 local new_definitions			-- array of variable and constant definitions to be added to .f
 
+math.randomseed(os.time())
+
 function printf(...)
 	print(string.format(...))
 end
@@ -30,6 +32,11 @@ function make_set(t)
 		set[v] = true
 	end
 	return set
+end
+
+-- Converts x from float to integer if it can be exactly represented as integer.
+function int(x)
+	return math.tointeger(x) or x
 end
 
 -- Stack
@@ -265,6 +272,10 @@ immediate_words = make_set{
 	":", ";", "(", "[", "IF", "ELSE", "THEN", "BEGIN", "UNTIL", "AGAIN", "DO", "LOOP", "+LOOP", "ASCII",
 }
 
+hidden_words = make_set{
+	"lit", "branch", "?branch", "loop", "ret",
+}
+
 dict = {
 	[','] = function()
 		emit(pop())
@@ -285,8 +296,10 @@ dict = {
 	['+'] = function() local a, b = pop2(); push(a + b) end,
 	['-'] = function() local a, b = pop2(); push(a - b) end,
 	['*'] = function() local a, b = pop2(); push(a * b) end,
-	['/'] = function() local a, b = pop2(); push(a / b) end,
+	['/'] = function() local a, b = pop2(); push(int(a / b)) end,
 	['//'] = function() local a, b = pop2(); push(math.floor(a / b)) end,
+	['%'] = function() local a, b = pop2(); push(a % b) end,
+	['^'] = function() local a, b = pop2(); push(int(a ^ b)) end,
 	['<'] = function() local a, b = pop2(); push_bool(a < b) end,
 	['>'] = function() local a, b = pop2(); push_bool(a > b) end,
 	['='] = function() local a, b = pop2(); push_bool(a == b) end,
@@ -383,6 +396,18 @@ dict = {
 	SIN = function() push(math.sin(pop())) end,
 	COS = function() push(math.cos(pop())) end,
 	TAN = function() push(math.tan(pop())) end,
+	ASIN = function() push(math.asin(pop())) end,
+	ACOS = function() push(math.acos(pop())) end,
+	ATAN = function() push(math.atan(pop())) end,
+	DEG = function() push(math.deg(pop())) end,
+	RAD = function() push(math.rad(pop())) end,
+	FLOOR = function() push(math.floor(pop())) end,
+	CEIL = function() push(math.ceil(pop())) end,
+	SQRT = function() push(int(math.sqrt(pop()))) end,
+	EXP = function() push(math.exp(pop())) end,
+	LOG = function() push(math.log(pop())) end,
+	RANDOM = function() push(math.random(pop2())) end,
+	FRANDOM = function() push(math.random()) end,
 	CR = function() io.write("\n") end,
 	EMIT = function() io.write(string.char(pop())) end,
 	SPACE = function() io.write(" ") end,
@@ -413,6 +438,19 @@ dict = {
 		input = code .. " " .. input:sub(cur_pos)
 		cur_pos = 1
 		cur_line = 1
+	end,
+	VLIST = function()
+		local words = {}
+		for name in pairs(dict) do
+			if not hidden_words[name] then
+				words[#words + 1] = name
+			end
+		end
+		table.sort(words)
+		for _, name in ipairs(words) do
+			io.write(name, " ")
+		end
+		io.write("\n")
 	end,
 	IF = function()
 		check_compile_mode("IF")

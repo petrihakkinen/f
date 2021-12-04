@@ -1,12 +1,10 @@
 - allow using control flow words outside colon definitions?
 
-- what frequently used words are still missing?
-
 - format negative hex values as two's complement
 
 - add alias for disabling shell substitution of *
 
-- VLIST and LIST
+- LIST
 
 - clean up error messages (remove lua stack trace)
 	- ideally show where error occurred:
