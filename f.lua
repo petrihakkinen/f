@@ -23,8 +23,29 @@ function printf(...)
 	print(string.format(...))
 end
 
-function errorf(...)
-	error(string.format(...), 2)
+function runtime_error(...)
+	printf(...)
+
+	-- show error location
+	-- scan backwards one symbol
+	while cur_pos > 1 do
+		cur_pos = cur_pos - 1
+		if string.match(input:sub(cur_pos, cur_pos), "%S") then break end
+	end
+	while cur_pos > 1 do
+		if string.match(input:sub(cur_pos - 1, cur_pos - 1), "%s") then break end
+		cur_pos = cur_pos - 1
+	end
+	print(input)
+	print(string.rep(" ", cur_pos - 1) .. "^")
+
+	os.exit(-1)
+end
+
+function runtime_assert(cond, msg)
+	if not cond then
+		runtime_error(msg)
+	end
 end
 
 function make_set(t)
@@ -52,7 +73,7 @@ end
 
 function pop()
 	local v = stack[#stack]
-	assert(v, "stack empty!")
+	runtime_assert(v, "stack underflow")
 	stack[#stack] = nil
 	return v
 end
@@ -65,12 +86,12 @@ end
 
 function peek(idx)
 	local v = stack[#stack + idx + 1]
-	assert(v, "stack empty!")
+	runtime_assert(v, "stack underflow")
 	return v
 end
 
 function remove(idx)
-	assert(stack[#stack + idx + 1], "stack underflow!")
+	runtime_assert(stack[#stack + idx + 1], "stack underflow")
 	table.remove(stack, #stack + idx + 1)
 end
 
@@ -86,14 +107,14 @@ end
 
 function r_pop()
 	local v = return_stack[#return_stack]
-	assert(v, "return stack empty!")
+	runtime_assert(v, "return stack underflow")
 	return_stack[#return_stack] = nil
 	return v
 end
 
 function r_peek(idx)
 	local v = return_stack[#return_stack + idx + 1]
-	assert(v, "return stack underflow!")
+	runtime_assert(v, "return stack underflow")
 	return v
 end
 
@@ -136,9 +157,9 @@ end
 
 function next_number()
 	local sym = next_symbol()
-	if sym == nil then error("unexpected end of input") end
+	if sym == nil then runtime_error("unexpected end of input") end
 	local n = parse_number(sym)
-	if n == nil then errorf("expected number, got '%s'", sym) end
+	if n == nil then runtime_error("expected number, got '%s'", sym) end
 	return n
 end
 
@@ -151,7 +172,7 @@ end
 function format_number(n)
 	if math.type(n) == "integer" then
 		local base = mem[0]
-		assert(base >= 2 and base <= 36, "invalid numeric base")
+		runtime_assert(base >= 2 and base <= 36, "invalid numeric base")
 
 		local digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 		local result = ""
@@ -182,7 +203,7 @@ end
 -- Parses number from a string using current numeric base.
 function parse_number(str)
 	local base = mem[0]
-	assert(base >= 2 and base <= 36, "invalid numeric base")
+	runtime_assert(base >= 2 and base <= 36, "invalid numeric base")
 	if base == 10 then
 		return tonumber(str)
 	else
@@ -202,7 +223,7 @@ end
 
 function check_compile_mode(word)
 	if not compile_mode then
-		errorf(word .. " may only be used inside colon definitions")
+		runtime_error("%s may only be used inside colon definitions", word)
 	end
 end
 
@@ -220,7 +241,7 @@ function execute(addr)
 		local instr = fetch()
 		local func = dict[instr]
 		if func == nil then
-			errorf("trying to execute undefined word %s", tostring(instr))
+			runtime_error("trying to execute undefined word %s", tostring(instr))
 		end
 		func()
 	end
@@ -253,7 +274,7 @@ function execute_input(str)
 					emit('lit')
 					emit(n)
 				else
-					errorf("undefined word '%s'", sym)
+					runtime_error("undefined word %s", sym)
 				end
 			end
 		else
@@ -262,7 +283,7 @@ function execute_input(str)
 			if func == nil then
 				-- is it a number?
 				local n = parse_number(sym)
-				if n == nil then errorf("undefined word '%s'", sym) end
+				if n == nil then runtime_error("undefined word %s", sym) end
 				push(n)
 			else
 				func()
@@ -295,7 +316,7 @@ dict = {
 		compile_mode = false
 	end,
 	[']'] = function()
-		assert(not compile_mode, "] without matching [")
+		runtime_assert(not compile_mode, "] without matching [")
 		compile_mode = true
 	end,
 	['+'] = function() local a, b = pop2(); push(a + b) end,
@@ -332,7 +353,7 @@ dict = {
 		end
 	end,
 	[':'] = function()
-		assert(not compile_mode, ": cannot be used inside colon definition")
+		runtime_assert(not compile_mode, ": cannot be used inside colon definition")
 		colon_pos = cur_pos
 		local name = string.upper(next_symbol())
 		local addr = here()
@@ -377,7 +398,7 @@ dict = {
 		end
 	end,
 	VAR = function()
-		assert(not compile_mode, "VAR cannot be used inside colon definition")		
+		runtime_assert(not compile_mode, "VAR cannot be used inside colon definition")		
 		local name = next_symbol()
 		local addr = here()
 		local value = pop()
@@ -426,7 +447,7 @@ dict = {
 	SPACES = function() io.write(string.rep(" ", pop())) end,
 	ASCII = function()
 		local char = next_symbol()
-		if #char ~= 1 then error("invalid symbol following ASCII") end
+		if #char ~= 1 then runtime_error("invalid symbol following ASCII") end
 
 		if compile_mode then
 			emit('lit')
@@ -446,7 +467,7 @@ dict = {
 	J = function() push(r_peek(-3)) end,
 	LOAD = function()
 		local filename = next_symbol()
-		local file = assert(io.open(filename, "r"))
+		local file = runtime_assert(io.open(filename, "r"))
 		local src = file:read("a")
 		file:close()
 		input = src .. " " .. input:sub(cur_pos)
@@ -477,7 +498,7 @@ dict = {
 	end,
 	ELSE = function()
 		check_compile_mode("ELSE")
-		assert(pop() == 'if', "ELSE without matching IF")
+		runtime_assert(pop() == 'if', "ELSE without matching IF")
 		local where = pop()
 		-- emit jump to THEN
 		emit('branch')
@@ -490,7 +511,7 @@ dict = {
 	THEN = function()
 		check_compile_mode("THEN")
 		-- patch branch offset for ?branch at IF
-		assert(pop() == 'if', "THEN without matching IF")
+		runtime_assert(pop() == 'if', "THEN without matching IF")
 		local where = pop()
 		mem[where] = here() - where - 1
 	end,
@@ -501,14 +522,14 @@ dict = {
 	end,
 	UNTIL = function()
 		check_compile_mode("UNTIL")
-		assert(pop() == 'begin', "UNTIL without matching BEGIN")
+		runtime_assert(pop() == 'begin', "UNTIL without matching BEGIN")
 		local target = pop()
 		emit('?branch')
 		emit(target - here() - 1)
 	end,
 	AGAIN = function()
 		check_compile_mode("AGAIN")
-		assert(pop() == 'begin', "AGAIN without matching BEGIN")
+		runtime_assert(pop() == 'begin', "AGAIN without matching BEGIN")
 		local target = pop()
 		emit('branch')
 		emit(target - here() - 1)
@@ -523,7 +544,7 @@ dict = {
 	end,
 	LOOP = function()
 		check_compile_mode("LOOP")
-		assert(pop() == 'do', "LOOP without matching DO")
+		runtime_assert(pop() == 'do', "LOOP without matching DO")
 		local target = pop()
 		emit('lit')
 		emit(1)
@@ -532,7 +553,7 @@ dict = {
 	end,
 	["+LOOP"] = function()
 		check_compile_mode("+LOOP")
-		assert(pop() == 'do', "+LOOP without matching DO")
+		runtime_assert(pop() == 'do', "+LOOP without matching DO")
 		local target = pop()
 		emit('loop')
 		emit(target - here() - 1)		

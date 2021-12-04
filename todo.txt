@@ -5,8 +5,3 @@
 - add alias for disabling shell substitution of *
 
 - LIST
-
-- clean up error messages (remove lua stack trace)
-	- ideally show where error occurred:
-		1 +
-		  ^ stack empty!
