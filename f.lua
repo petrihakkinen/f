@@ -314,7 +314,14 @@ dict = {
 		local start_offset = here()
 		compile_mode = true
 		dict[name] = function()
-			execute(start_offset)
+			if pc > 0 then
+				-- call another word when executing compiled word
+				r_push(pc)
+				pc = start_offset
+			else
+				-- call compiled word from interpreter
+				execute(start_offset)
+			end
 		end
 	end,
 	[';'] = function()
@@ -495,7 +502,11 @@ dict = {
 		end
 	end,
 	ret = function()
-		pc = 0
+		if #return_stack > 0 then
+			pc = r_pop()
+		else
+			pc = 0
+		end
 	end,
 }
 
