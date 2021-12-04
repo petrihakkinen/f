@@ -15,6 +15,7 @@ local return_stack = {}
 local mem = { [0] = 10 }		-- where user defined words and variables reside
 local pc = 0					-- program counter for executing compiled code
 local new_definitions			-- array of variable and constant definitions to be added to .f
+local load_used					-- has the LOAD word been executed?
 
 math.randomseed(os.time())
 
@@ -446,11 +447,12 @@ dict = {
 	LOAD = function()
 		local filename = next_symbol()
 		local file = assert(io.open(filename, "r"))
-		local code = file:read("a")
+		local src = file:read("a")
 		file:close()
-		input = code .. " " .. input:sub(cur_pos)
+		input = src .. " " .. input:sub(cur_pos)
 		cur_pos = 1
 		cur_line = 1
+		load_used = true
 	end,
 	VLIST = function()
 		local words = {}
@@ -590,7 +592,7 @@ new_definitions = {}
 execute_input(src)
 
 -- store variables and constants
-if #new_definitions > 0 then
+if #new_definitions > 0 and not load_used then
 	for _, str in ipairs(new_definitions) do
 		local file = assert(io.open(".f", "a"))
 		file:write("\n", str)
@@ -599,7 +601,7 @@ if #new_definitions > 0 then
 end
 
 -- store colon definition
-if colon_pos then
+if colon_pos and not load_used then
 	local file = assert(io.open(".f", "a"))
 	file:write("\n: ", src:sub(colon_pos), " ;\n")
 	file:close()

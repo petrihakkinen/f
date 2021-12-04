@@ -1,5 +1,3 @@
-- BUG: words defined by LOADing a forth file are added to init file
-
 - allow using control flow words outside colon definitions?
 
 - format negative hex values as two's complement
