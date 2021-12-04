@@ -14,8 +14,7 @@ local stack = {}
 local return_stack = {}
 local mem = { [0] = 10 }		-- where user defined words and variables reside
 local pc = 0					-- program counter for executing compiled code
-
---print("input: " .. input)
+local new_definitions			-- array of variable and constant definitions to be added to .f
 
 function printf(...)
 	print(string.format(...))
@@ -336,10 +335,10 @@ dict = {
 		push(r_pop())
 	end,
 	CONST = function()
-		local name = string.upper(next_symbol())
+		local name = next_symbol()
 		local value = pop()
 
-		dict[name] = function()
+		dict[string.upper(name)] = function()
 			if compile_mode then
 				emit('lit')
 				emit(value)
@@ -347,15 +346,24 @@ dict = {
 				push(value)
 			end
 		end
+
+		if new_definitions then
+			table.insert(new_definitions, value .. " const " .. name .. "\n")
+		end
 	end,
 	VAR = function()
 		assert(not compile_mode, "VAR cannot be used inside colon definition")		
-		local name = string.upper(next_symbol())
+		local name = next_symbol()
 		local addr = here()
-		emit(pop())
+		local value = pop()
+		emit(value)
 
-		dict[name] = function()
+		dict[string.upper(name)] = function()
 			push(addr)
+		end
+
+		if new_definitions then
+			table.insert(new_definitions, value .. " var " .. name .. "\n")
 		end
 	end,
 	DUP = function() push(peek(-1)) end,
@@ -393,6 +401,8 @@ dict = {
 	BASE = function() push(0) end,
 	HEX = function() mem[0] = 16 end,
 	DECIMAL = function() mem[0] = 10 end,
+	TRUE = function() push(1) end,
+	FALSE = function() push(0) end,
 	PI = function() push(math.pi) end,
 	I = function() push(r_peek(-1)) end,
 	LOAD = function()
@@ -521,7 +531,17 @@ end
 -- execute input
 local src = table.concat({...}, " ")
 colon_pos = nil
+new_definitions = {}
 execute_input(src)
+
+-- store variables and constants
+if #new_definitions > 0 then
+	for _, str in ipairs(new_definitions) do
+		local file = assert(io.open(".f", "a"))
+		file:write("\n", str)
+		file:close()
+	end
+end
 
 -- store colon definition
 if colon_pos then
