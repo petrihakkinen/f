@@ -5,9 +5,10 @@
 -- alias f='set -f;f';f(){ ~/code/f/f.lua "$@";set +f;}
 -- this creates an alias so f can now be invoked like this: f 2 3 *
 
-local input = table.concat({...}, " ")
+local input						-- input buffer
 local cur_pos = 1				-- current position in input buffer
 local cur_line = 1				-- not really used
+local colon_pos					-- position of the previous colon in input buffer
 local compile_mode = false		-- interpret or compile mode?
 local stack = {}
 local return_stack = {}
@@ -214,6 +215,51 @@ function execute(addr)
 	end
 end
 
+-- Executes input buffer.
+function execute_input(str)
+	input = str
+	cur_pos = 1
+	cur_line = 1
+
+	while true do
+		local sym = next_symbol()
+		if sym == nil then break end
+		sym = string.upper(sym)
+		--printf("symbol [%s]", sym)
+
+		if compile_mode then
+			-- compile mode
+			if immediate_words[sym] then
+				-- execute immediate word
+				dict[sym]()
+			else
+				local w = dict[sym]
+				local n = parse_number(sym)
+
+				if w then -- is it a word?
+					emit(sym)
+				elseif n then -- is it a number?
+					emit('lit')
+					emit(n)
+				else
+					errorf("undefined word '%s'", sym)
+				end
+			end
+		else
+			-- interpret mode
+			local func = dict[sym]
+			if func == nil then
+				-- is it a number?
+				local n = parse_number(sym)
+				if n == nil then errorf("undefined word '%s'", sym) end
+				push(n)
+			else
+				func()
+			end
+		end
+	end
+end
+
 -- Built-in words
 
 immediate_words = make_set{
@@ -263,6 +309,7 @@ dict = {
 	end,
 	[':'] = function()
 		assert(not compile_mode, ": cannot be used inside colon definition")
+		colon_pos = cur_pos
 		local name = string.upper(next_symbol())
 		local start_offset = here()
 		compile_mode = true
@@ -453,49 +500,23 @@ dict = {
 }
 
 -- load init file
-local file, err = io.open(".f", "r")
+local file = io.open(".f", "r")
 if file then
-	input = file:read("a") .. "\n" .. input
+	local src = file:read("a")
 	file:close()
+	execute_input(src)
 end
 
 -- execute input
-while true do
-	local sym = next_symbol()
-	if sym == nil then break end
-	sym = string.upper(sym)
-	--printf("symbol [%s]", sym)
+local src = table.concat({...}, " ")
+colon_pos = nil
+execute_input(src)
 
-	if compile_mode then
-		-- compile mode
-		if immediate_words[sym] then
-			-- execute immediate word
-			dict[sym]()
-		else
-			local w = dict[sym]
-			local n = parse_number(sym)
-
-			if w then -- is it a word?
-				emit(sym)
-			elseif n then -- is it a number?
-				emit('lit')
-				emit(n)
-			else
-				errorf("undefined word '%s'", sym)
-			end
-		end
-	else
-		-- interpret mode
-		local func = dict[sym]
-		if func == nil then
-			-- is it a number?
-			local n = parse_number(sym)
-			if n == nil then errorf("undefined word '%s'", sym) end
-			push(n)
-		else
-			func()
-		end
-	end
+-- store colon definition
+if colon_pos then
+	local file = assert(io.open(".f", "a"))
+	file:write("\n: ", src:sub(colon_pos), " ;\n")
+	file:close()
 end
 
 -- print results
