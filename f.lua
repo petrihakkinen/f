@@ -13,13 +13,7 @@ local stack = {}
 local return_stack = {}			-- this is not actually used for execution, just for standard forth words
 local mem = { [0] = 10 }
 local dictionary = {}			-- where user defined words are compiled into
-
--- internal words which are only available in compiled code
-LIT = {}
-BRANCH = {}
-CBRANCH = {}
-LOOP = {}
-RET = {}
+local pc = 0					-- program counter for execute()
 
 --print("input: " .. input)
 
@@ -194,42 +188,23 @@ end
 
 -- Execution
 
+function fetch()
+	local instr = dictionary[pc]
+	pc = pc + 1
+	return instr
+end
+
 -- Executes word at given address in dictionary.
 function execute(addr)
-	local function fetch()
-		local instr = dictionary[addr]
-		addr = addr + 1
-		return instr
-	end
+	pc = addr
 
-	while true do
+	while pc > 0 do
 		local instr = fetch()
-		--print(instr)
-		if instr == LIT then
-			push(fetch())
-		elseif instr == BRANCH then
-			local offset = fetch()
-			addr = addr + offset
-		elseif instr == CBRANCH then
-			local offset = fetch()
-			if pop() == 0 then
-				addr = addr + offset
-			end
-		elseif instr == LOOP then
-			local offset = fetch()
-			local step = pop()
-			local counter = r_pop() + step
-			local limit = r_pop()
-			if (step >= 0 and counter < limit) or (step < 0 and counter > limit) then
-				r_push(limit)
-				r_push(counter)
-				addr = addr + offset
-			end
-		elseif instr == RET then
-			return
-		else
-			interpret_dict[instr]()
+		local func = interpret_dict[instr]
+		if func == nil then
+			errorf("trying to execute undefined word %s", tostring(instr))
 		end
+		func()
 	end
 end
 
@@ -291,7 +266,7 @@ interpret_dict = {
 
 		-- add compile time word which emits the constant as literal
 		compile_dict[name] = function()
-			emit(LIT)
+			emit('lit')
 			emit(value)
 		end
 
@@ -340,6 +315,35 @@ interpret_dict = {
 		cur_pos = 1
 		cur_line = 1
 	end,
+
+	-- internal words, these are in lowercase so they are not accessible from user code
+	lit = function()
+		push(fetch())
+	end,
+	branch = function()
+		local offset = fetch()
+		pc = pc + offset
+	end,
+	['?branch'] = function()
+		local offset = fetch()
+		if pop() == 0 then
+			pc = pc + offset
+		end
+	end,
+	loop = function()
+		local offset = fetch()
+		local step = pop()
+		local counter = r_pop() + step
+		local limit = r_pop()
+		if (step >= 0 and counter < limit) or (step < 0 and counter > limit) then
+			r_push(limit)
+			r_push(counter)
+			pc = pc + offset
+		end
+	end,
+	ret = function()
+		pc = 0
+	end,
 }
 
 compile_dict = {
@@ -347,7 +351,7 @@ compile_dict = {
 		error("invalid :")
 	end,
 	[';'] = function()
-		emit(RET)
+		emit('ret')
 		compile_mode = false
 	end,
 	['('] = interpret_dict['('],
@@ -357,7 +361,7 @@ compile_dict = {
 	end,
 	IF = function()
 		-- emit conditional branch
-		emit(CBRANCH)
+		emit('?branch')
 		push(here())
 		push('if')
 		emit(0)	-- placeholder branch offset
@@ -366,7 +370,7 @@ compile_dict = {
 		assert(pop() == 'if', "ELSE without matching IF")
 		local where = pop()
 		-- emit jump to THEN
-		emit(BRANCH)
+		emit('branch')
 		push(here())
 		push('if')
 		emit(0)	-- placeholder branch offset
@@ -386,13 +390,13 @@ compile_dict = {
 	UNTIL = function()
 		assert(pop() == 'begin', "UNTIL without matching BEGIN")
 		local target = pop()
-		emit(CBRANCH)
+		emit('?branch')
 		emit(target - here() - 1)
 	end,
 	AGAIN = function()
 		assert(pop() == 'begin', "AGAIN without matching BEGIN")
 		local target = pop()
-		emit(BRANCH)
+		emit('branch')
 		emit(target - here() - 1)
 	end,
 	DO = function()
@@ -405,21 +409,21 @@ compile_dict = {
 	LOOP = function()
 		assert(pop() == 'do', "LOOP without matching DO")
 		local target = pop()
-		emit(LIT)
+		emit('lit')
 		emit(1)
-		emit(LOOP)
+		emit('loop')
 		emit(target - here() - 1)		
 	end,
 	["+LOOP"] = function()
 		assert(pop() == 'do', "+LOOP without matching DO")
 		local target = pop()
-		emit(LOOP)
+		emit('loop')
 		emit(target - here() - 1)		
 	end,
 	ASCII = function()
 		local char = next_symbol()
 		if #char ~= 1 then error("invalid symbol following ASCII") end
-		emit(LIT)
+		emit('lit')
 		emit(char:byte(1))
 	end,
 }
@@ -445,7 +449,7 @@ while true do
 			local n = parse_number(sym)
 			local w = interpret_dict[sym]
 			if n then -- is it a number?
-				emit(LIT)
+				emit('lit')
 				emit(n)
 			elseif w then -- is it a word?
 				emit(sym)
