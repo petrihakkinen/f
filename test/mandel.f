@@ -1,5 +1,5 @@
 create ascii-table
-	32 , ( space )
+	BL ,
 	ascii ` , ascii ' , ascii . , ascii - , ascii , , ascii _ , ascii : , ascii ^ , ascii ~ , ascii ! , ascii " ,
 	ascii ; , ascii r , ascii / , ascii \ , ascii + , ascii ( , ascii ) , ascii > , ascii < , ascii | , ascii = ,
 	ascii ? , ascii l , ascii c , ascii i , ascii [ , ascii ] , ascii v , ascii t , ascii z , ascii j , ascii L ,
@@ -32,7 +32,7 @@ here ascii-table - const MAX_CHARS ( number of chars in ascii-table )
 	begin
 		( check termination )	
 		dup [ MAX_CHARS 1- lit ] =   x @ sqr   y @ sqr +   4 >   or  if
-			>r drop drop r> ret
+			nip nip exit
 		then
 		( step )
 		x @ sqr  y @ sqr -   4 pick + ( x' = x*x - y*y + x0 )

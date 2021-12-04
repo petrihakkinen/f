@@ -1,7 +1,13 @@
+- error location visualization works really bad with long loaded files such as mandel.f
+
 - allow using control flow words outside colon definitions?
 
 - format negative hex values as two's complement
 
 - add alias for disabling shell substitution of *
 
-- LIST
+- LIST, R@, LEAVE, UNLOOP
+
+- rename >R -> PUSH, R> -> POP ?
+
+- ,S or something for enclosing strings into dictionary (are space terminated strings ok?)

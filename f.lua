@@ -46,6 +46,7 @@ function runtime_assert(cond, msg)
 	if not cond then
 		runtime_error(msg)
 	end
+	return cond
 end
 
 function make_set(t)
@@ -295,7 +296,7 @@ end
 -- Built-in words
 
 immediate_words = make_set{
-	":", ";", "(", "[", "IF", "ELSE", "THEN", "BEGIN", "UNTIL", "AGAIN", "DO", "LOOP", "+LOOP", "ASCII",
+	":", ";", "(", "[", "IF", "ELSE", "THEN", "BEGIN", "UNTIL", "AGAIN", "DO", "LOOP", "+LOOP", "EXIT", "ASCII"
 }
 
 hidden_words = make_set{
@@ -336,6 +337,8 @@ dict = {
 	['1-'] = function() push(pop() - 1) end,
 	['2+'] = function() push(pop() + 2) end,
 	['2-'] = function() push(pop() - 2) end,
+	['2*'] = function() push(pop() * 2) end,
+	['2/'] = function() push(int(pop() / 2)) end,
 	['.'] = function() io.write(format_number(pop()), " ") end,
 	['!'] = function()
 		local n, addr = pop2()
@@ -371,7 +374,7 @@ dict = {
 	end,
 	[';'] = function()
 		check_compile_mode(";")
-		emit('RET')
+		emit('ret')
 		compile_mode = false
 	end,
 	['>R'] = function()
@@ -415,6 +418,7 @@ dict = {
 	DUP = function() push(peek(-1)) end,
 	OVER = function() push(peek(-2)) end,
 	DROP = function() pop() end,
+	NIP = function() local a, b = pop2(); push(b) end,
 	ROT = function() push(peek(-3)); remove(-4) end,
 	SWAP = function() local a, b = pop2(); push(b); push(a) end,
 	PICK = function() push(peek(-pop())) end,
@@ -423,6 +427,9 @@ dict = {
 	AND = function() local a, b = pop2(); push(a & b) end,
 	OR = function() local a, b = pop2(); push(a | b) end,
 	XOR = function() local a, b = pop2(); push(a ~ b) end,
+	NOT = function() push_bool(pop() == 0) end,
+	LSHIFT = function() local a, b = pop2(); push(a << b) end,
+	RSHIFT = function() local a, b = pop2(); push(a >> b) end,
 	ABS = function() push(math.abs(pop())) end,
 	MIN = function() local a, b = pop2(); push(math.min(a, b)) end,
 	MAX = function() local a, b = pop2(); push(math.max(a, b)) end,
@@ -462,6 +469,7 @@ dict = {
 	DECIMAL = function() mem[0] = 10 end,
 	TRUE = function() push(1) end,
 	FALSE = function() push(0) end,
+	BL = function() push(32) end,
 	PI = function() push(math.pi) end,
 	I = function() push(r_peek(-1)) end,
 	J = function() push(r_peek(-3)) end,
@@ -558,16 +566,13 @@ dict = {
 		emit('loop')
 		emit(target - here() - 1)		
 	end,
+	EXIT = function()
+		check_compile_mode("EXIT")
+		emit('ret')
+	end,
 	LIT = function()
 		emit('lit')
 		emit(pop())
-	end,
-	RET = function()
-		if #return_stack > 0 then
-			pc = r_pop()
-		else
-			pc = 0
-		end
 	end,
 
 	-- internal words, these are in lowercase so they are not accessible from user code
@@ -594,6 +599,13 @@ dict = {
 			r_push(limit)
 			r_push(counter)
 			pc = pc + offset
+		end
+	end,
+	ret = function()
+		if #return_stack > 0 then
+			pc = r_pop()
+		else
+			pc = 0
 		end
 	end,
 }
