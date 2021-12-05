@@ -190,35 +190,45 @@ function base()
 end
 
 -- Returns string representation of a number in current numeric base.
+-- Floats are always printed in base-10!
 function format_number(n)
-	if math.type(n) == "integer" then
-		local base = mem[0]
-		runtime_assert(base >= 2 and base <= 36, "invalid numeric base")
+	if math.type(n) == "float" then return tostring(n) end
 
-		local digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		local result = ""
+	local base = mem[0]
+	runtime_assert(base >= 2 and base <= 36, "invalid numeric base")
 
-		if n == 0 then return "0" end
+	local digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	local result = ""
 
-		local neg
-		if n < 0 then
-			n = math.abs(n)
-			neg = true
-		end
+	if n == 0 then return "0" end
 
-		-- TODO: negative hexadecimals should be handled specially?
+	if n < 0 then
+		n = math.abs(n)
 
-		while n > 0 do
-			local d = n % base
-			result = digits:sub(d + 1, d + 1) .. result
-			n = n // base
-		end
-
-		if neg then result = "-" .. result end
-		return result
-	else
-		return tostring(n)
+		if base == 2 then
+			local num_digits = 32
+			n = (1 << num_digits) - n
+		elseif base == 4 then
+			local num_digits = 16
+			n = (1 << num_digits * 2) - n
+		elseif base == 8 then
+			local num_digits = 16
+			n = (1 << num_digits * 3) - n
+		elseif base == 16 then
+			local num_digits = 8
+			n = (1 << num_digits * 4) - n
+		else
+			result = "-"
+		end			
 	end
+
+	while n > 0 do
+		local d = n % base
+		result = result .. digits:sub(d + 1, d + 1)
+		n = n // base
+	end
+
+	return string.reverse(result)
 end
 
 -- Parses number from a string using current numeric base.
@@ -501,8 +511,9 @@ dict = {
 	end,
 	HERE = function() push(here()) end,
 	BASE = function() push(0) end,
-	HEX = function() mem[0] = 16 end,
+	BINARY = function() mem[0] = 2 end,
 	DECIMAL = function() mem[0] = 10 end,
+	HEX = function() mem[0] = 16 end,
 	TRUE = function() push(1) end,
 	FALSE = function() push(0) end,
 	BL = function() push(32) end,

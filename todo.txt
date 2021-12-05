@@ -1,7 +1,5 @@
 - allow using control flow words outside colon definitions?
 
-- format negative hex values as two's complement
-
 - add alias for disabling shell substitution of *
 
 - LEAVE, UNLOOP, FORGET <word>
