@@ -13,13 +13,15 @@ Features:
 
 ## Installation
 
-1. Install and compile Lua 5.4 from <http://www.lua.org/download.html>.
+1. Prerequisite: Install and compile Lua 5.4 from <http://www.lua.org/download.html>.
 
-2. Add the following to your `.bashrc` (this is for bash, other shells may require different mantra):
+2. Assuming you are using bash, add the following alias to your `.bashrc` (or `.bash_profile` on macOS):
 
 	alias f='set -f;f';f(){ /path/to/lua /path/to/f.lua "$@";set +f;}
 
-This create an alias so that `f` can be invoked anywhere from command line. It also disables wildcard expansion (aka globbing) for the asterisk so that `*` can be used as a word name.
+`/path/to/lua` should be replaced with a path to the Lua interpreter on your system and `/path/to/f.lua` with a path to `f.lua` where-ever you installed it.
+
+Other shells may require different mantra for the alias. While it is not strictly necessary, the alias makes it easy to invoke `f` anywhere from the command line. It also disables wildcard expansion (aka globbing) for the asterisk so that `*` can be used as a word name.
 
 f is written 100% in Lua so you don't need to compile it.
 
@@ -92,7 +94,7 @@ The built-in words BINARY, HEX and DECIMAL set the BASE accordingly.
 
 On startup f attempts to load the file `.f`, if it exists, from the current directory. New words, variables and constants are automatically appended to the init file. You should not need to edit the init file manually. You can list the contents of the init file using the LIST word, and remove existing words using FORGET. 
 
-Note that for simplicity defining a new word does not currently remove existing definitions for that word from the init file. From time to time, you may wish to purge duplicate words from the init file.
+When defining new words, previous definitions for that word are automatically removed.
 
 
 ## Constants and Variables
@@ -212,22 +214,23 @@ The following letters are used to denote values on the stack:
 
 | Word            | Stack              | Description                                                         |
 | --------------- | ------------------ | ------------------------------------------------------------------- |
-| : `<name>`      | ( - )              | Define new word with name `<name>` ("colon definition")             |
+| : \<name\>      | ( - )              | Define new word with name \<name\> ("colon definition")             |
 | ;               | ( - )              | Mark the end of colon definition, go back to interpreted state      |
 | ,               | ( n - )            | Enclose value to next free location in output dictionary            |
 | (               | ( - )              | Parse until the next ), throw away the parsed symbol                |
 | [               | ( - )              | Change from compile to interpreter state                            |
 | ]               | ( - )              | Change from interpreter to compile state                            |
-| CREATE `<name>` | ( - )              | Add new (empty) word to dictionary with name `<name>`               |
-| CONST `<name>`  | ( n - )            | Capture value to a new word with name `<name>`                      |
-| VAR `<name>`    | ( n - )            | Create new variable with name `<name>` and with initial value n     |
-| ASCII `<char>`  | ( - (n) )          | Emit literal containing the ASCII code of the following symbol      |
-| CHARS `<string>` | ( - )             | Enclose a space-terminated string into output dictionary            |
+| CREATE \<name\> | ( - )              | Add new (empty) word to dictionary with name \<name\>               |
+| CONST \<name\>  | ( n - )            | Capture value to a new word with name \<name\>                      |
+| VAR \<name\>    | ( n - )            | Create new variable with name \<name\> and with initial value n     |
+| ALLOT           | ( n - )            | Allocates space for n elements from output dictionary               |
+| ASCII \<char\>  | ( - (n) )          | Emit literal containing the ASCII code of the following symbol      |
+| CHARS \<string\> | ( - )             | Enclose a space-terminated string into output dictionary            |
 | HERE            | ( - n )            | Push the address of the next free location in output dictionary     |
-| LOAD `<filename>` | ( - )            | Load and interpret Forth source code from external file             |
+| LOAD \<filename\> | ( - )            | Load and interpret Forth source code from external file             |
 | VLIST           | ( - )              | Print the names of all defined words                                |
 | LIST            | ( - )              | Print the contents of init file                                     |
-| FORGET `<name>` | ( - )              | Remove all definitions of a word from init file                     |
+| FORGET \<name\> | ( - )              | Remove all definitions of a word from init file                     |
 | LIT             | ( n - )            | Emit value from data stack to output dictionary                     |
 
 ### Constants and Variables

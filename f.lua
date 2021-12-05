@@ -1,4 +1,8 @@
-#!lua
+-- f
+-- Forth interpreter that can be used as a commandline calculator on Unix-like shells
+--
+-- Copyright (c) 2021 Petri Häkkinen
+-- See LICENSE file for details
 
 local input						-- input buffer
 local cur_pos = 1				-- current position in input buffer
@@ -438,6 +442,12 @@ dict = {
 		local addr = here()
 		dict[name] = function()
 			push(addr)
+		end
+	end,
+	ALLOT = function()
+		local n = pop_int()
+		for i = 1, n do
+			emit(0)
 		end
 	end,
 	[':'] = function()
