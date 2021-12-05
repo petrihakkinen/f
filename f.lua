@@ -110,9 +110,21 @@ function pop()
 	return v
 end
 
+function pop_int()
+	local v = math.tointeger(pop())
+	runtime_assert(v, "integer argument expected")
+	return v
+end
+
 function pop2()
 	local a = pop()
 	local b = pop()
+	return b, a
+end
+
+function pop_int2()
+	local a = pop_int()
+	local b = pop_int()
 	return b, a
 end
 
@@ -367,8 +379,8 @@ dict = {
 	['+'] = function() local a, b = pop2(); push(a + b) end,
 	['-'] = function() local a, b = pop2(); push(a - b) end,
 	['*'] = function() local a, b = pop2(); push(a * b) end,
-	['/'] = function() local a, b = pop2(); push(int(a / b)) end,
-	['//'] = function() local a, b = pop2(); push(math.floor(a / b)) end,
+	['/'] = function() local a, b = pop2(); runtime_assert(b ~= 0, "division by zero"); push(int(a / b)) end,
+	['//'] = function() local a, b = pop2(); runtime_assert(b ~= 0, "division by zero"); push(math.floor(a / b)) end,
 	['%'] = function() local a, b = pop2(); push(a % b) end,
 	['^'] = function() local a, b = pop2(); push(int(a ^ b)) end,
 	['<'] = function() local a, b = pop2(); push_bool(a < b) end,
@@ -384,18 +396,9 @@ dict = {
 	['2*'] = function() push(pop() * 2) end,
 	['2/'] = function() push(int(pop() / 2)) end,
 	['.'] = function() io.write(format_number(pop()), " ") end,
-	['!'] = function()
-		local n, addr = pop2()
-		mem[addr] = n
-	end,
-	['+!'] = function()
-		local n, addr = pop2()
-		mem[addr] = mem[addr] + n
-	end,
-	['@'] = function()
-		local addr = pop()
-		push(mem[addr] or 0)
-	end,
+	['!'] = function() local addr = pop_int(); local n = pop(); mem[addr] = n end,
+	['+!'] = function() local addr = pop_int(); local n = pop(); mem[addr] = mem[addr] + n end,
+	['@'] = function() local addr = pop_int(); push(mem[addr] or 0) end,
 	CREATE = function()
 		local name = string.upper(next_symbol())
 		local addr = here()
@@ -424,15 +427,6 @@ dict = {
 		check_compile_mode(";")
 		emit('ret')
 		compile_mode = false
-	end,
-	PUSH = function()
-		r_push(pop())
-	end,
-	POP = function()
-		push(r_pop())
-	end,
-	['R@'] = function()
-		push(r_peek(-1))
 	end,
 	CONST = function()
 		local name = next_symbol()
@@ -475,13 +469,16 @@ dict = {
 	ROT = function() push(peek(-3)); remove(-4) end,
 	SWAP = function() local a, b = pop2(); push(b); push(a) end,
 	PICK = function() push(peek(-pop())) end,
+	PUSH = function() r_push(pop()) end,
+	POP = function() push(r_pop()) end,
+	['R@'] = function() push(r_peek(-1)) end,
 	NEGATE = function() push(-pop()) end,
-	AND = function() local a, b = pop2(); push(a & b) end,
-	OR = function() local a, b = pop2(); push(a | b) end,
-	XOR = function() local a, b = pop2(); push(a ~ b) end,
+	AND = function() local a, b = pop_int2(); push(a & b) end,
+	OR = function() local a, b = pop_int2(); push(a | b) end,
+	XOR = function() local a, b = pop_int2(); push(a ~ b) end,
 	NOT = function() push_bool(pop() == 0) end,
-	LSHIFT = function() local a, b = pop2(); push(a << b) end,
-	RSHIFT = function() local a, b = pop2(); push(a >> b) end,
+	LSHIFT = function() local a, b = pop_int2(); push(a << b) end,
+	RSHIFT = function() local a, b = pop_int2(); push(a >> b) end,
 	ABS = function() push(math.abs(pop())) end,
 	MIN = function() local a, b = pop2(); push(math.min(a, b)) end,
 	MAX = function() local a, b = pop2(); push(math.max(a, b)) end,
@@ -495,15 +492,15 @@ dict = {
 	RAD = function() push(math.rad(pop())) end,
 	FLOOR = function() push(math.floor(pop())) end,
 	CEIL = function() push(math.ceil(pop())) end,
-	SQRT = function() push(int(math.sqrt(pop()))) end,
+	SQRT = function() local a = pop(); runtime_assert(a >= 0, "argument for SQRT but be >= 0"); push(int(math.sqrt(a))) end,
 	EXP = function() push(math.exp(pop())) end,
-	LOG = function() push(math.log(pop())) end,
-	RANDOM = function() push(math.random(pop2())) end,
+	LOG = function() local a = pop(); runtime_assert(a > 0, "argument for LOG must be > 0"); push(math.log(a)) end,
+	RANDOM = function() local a, b = pop_int2(); runtime_assert(a <= b, "invalid interval for RANDOM"); push(math.random(a, b)) end,
 	FRANDOM = function() push(math.random()) end,
 	CR = function() io.write("\n") end,
 	EMIT = function() io.write(string.char(pop())) end,
 	SPACE = function() io.write(" ") end,
-	SPACES = function() io.write(string.rep(" ", pop())) end,
+	SPACES = function() io.write(string.rep(" ", pop_int())) end,
 	ASCII = function()
 		local char = next_symbol()
 		if #char ~= 1 then runtime_error("invalid symbol following ASCII") end

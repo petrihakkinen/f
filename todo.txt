@@ -1,9 +1,6 @@
 - allow using control flow words outside colon definitions?
 
-- add alias for disabling shell substitution of *
-
 - LEAVE, UNLOOP, ALLOT
 
-- division by zero
-
-- sqrt of negative value, any other ill behaved values?
+- forget previous definitions automatically
+	- error if word type mismatches (FORGET previous definition first)
