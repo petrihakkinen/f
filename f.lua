@@ -1,5 +1,5 @@
 -- f
--- Forth interpreter that can be used as a commandline calculator on Unix-like shells
+-- Forth interpreter that can be used as a command line calculator on Unix-like shells
 --
 -- Copyright (c) 2021 Petri Häkkinen
 -- See LICENSE file for details

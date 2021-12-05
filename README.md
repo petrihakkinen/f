@@ -1,6 +1,6 @@
 # f
 
-f is a Forth interpreter that can be used as a commandline calculator on Unix-like shells.
+f is a Forth interpreter that can be used as a command line calculator on Unix-like shells.
 
 Features:
 
