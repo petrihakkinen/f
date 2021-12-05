@@ -316,7 +316,8 @@ end
 -- Built-in words
 
 immediate_words = make_set{
-	":", ";", "(", "[", "IF", "ELSE", "THEN", "BEGIN", "UNTIL", "AGAIN", "DO", "LOOP", "+LOOP", "EXIT", "ASCII"
+	":", ";", "(", "[", "IF", "ELSE", "THEN", "BEGIN", "UNTIL", "AGAIN", "DO", "LOOP", "+LOOP", "EXIT",
+	"ASCII", "CHARS"
 }
 
 hidden_words = make_set{
@@ -490,6 +491,12 @@ dict = {
 			emit(char:byte(1))
 		else
 			push(char:byte(1))
+		end
+	end,
+	CHARS = function()
+		local chars = next_symbol()
+		for i = 1, #chars do
+			emit(chars:byte(i))
 		end
 	end,
 	HERE = function() push(here()) end,

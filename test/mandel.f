@@ -1,14 +1,6 @@
 create ascii-table
 	BL ,
-	ascii ` , ascii ' , ascii . , ascii - , ascii , , ascii _ , ascii : , ascii ^ , ascii ~ , ascii ! , ascii " ,
-	ascii ; , ascii r , ascii / , ascii \ , ascii + , ascii ( , ascii ) , ascii > , ascii < , ascii | , ascii = ,
-	ascii ? , ascii l , ascii c , ascii i , ascii [ , ascii ] , ascii v , ascii t , ascii z , ascii j , ascii L ,
-	ascii 7 , ascii f , ascii x , ascii * , ascii s , ascii } , ascii { , ascii Y , ascii T , ascii J , ascii 1 ,
-	ascii u , ascii n , ascii C , ascii y , ascii I , ascii F , ascii o , ascii 2 , ascii e , ascii w , ascii V ,
-	ascii h , ascii 3 , ascii k , ascii a , ascii % , ascii Z , ascii 4 , ascii 5 , ascii S , ascii X , ascii $ ,
-	ascii P , ascii m , ascii G , ascii A , ascii p , ascii q , ascii b , ascii d , ascii U , ascii E , ascii & ,
-	ascii K , ascii 6 , ascii 9 , ascii O , ascii H , ascii g , ascii # , ascii D , ascii 8 , ascii R , ascii Q ,
-	ascii W , ascii 0 , ascii M , ascii B , ascii @ , ascii N ,
+	chars `'.-,_:^~!";r/\+()><|=?lci[]vtzjL7fx*s}{YTJ1unCyIFo2ewVh3ka%Z45SX$PmGApqbdUE&K69OHg#D8RQW0MB@N
 
 here ascii-table - const MAX_CHARS ( number of chars in ascii-table )
 
