@@ -43,4 +43,4 @@ here ascii-table - const MAX_CHARS ( number of chars in ascii-table )
 		cr
 	loop 2drop ;
 
-80 40 mandel
+50 24 mandel

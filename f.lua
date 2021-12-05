@@ -1,10 +1,5 @@
 #!lua
 
--- Disabling * wildcard expansion:
--- run this in shell (could be placed in bash init file?):
--- alias f='set -f;f';f(){ ~/code/f/f.lua "$@";set +f;}
--- this creates an alias so f can now be invoked like this: f 2 3 *
-
 local input						-- input buffer
 local cur_pos = 1				-- current position in input buffer
 local cur_line = 1				-- not really used
@@ -462,7 +457,6 @@ dict = {
 	ROT = function() push(peek(-3)); remove(-4) end,
 	SWAP = function() local a, b = pop2(); push(b); push(a) end,
 	PICK = function() push(peek(-pop())) end,
-	ROLL = function() local i = pop(); push(peek(-i)); remove(-i - 1) end,
 	NEGATE = function() push(-pop()) end,
 	AND = function() local a, b = pop2(); push(a & b) end,
 	OR = function() local a, b = pop2(); push(a | b) end,

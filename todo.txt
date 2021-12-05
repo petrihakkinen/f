@@ -2,6 +2,8 @@
 
 - add alias for disabling shell substitution of *
 
-- LEAVE, UNLOOP, FORGET <word>
+- LEAVE, UNLOOP, FORGET <word>, ALLOT
 
-- ,S or something for enclosing strings into dictionary (are space terminated strings ok?)
+- division by zero
+
+- sqrt of negative value, any other ill behaved values?
