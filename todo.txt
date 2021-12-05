@@ -2,7 +2,7 @@
 
 - add alias for disabling shell substitution of *
 
-- LEAVE, UNLOOP, FORGET <word>, ALLOT
+- LEAVE, UNLOOP, ALLOT
 
 - division by zero
 

@@ -77,6 +77,22 @@ function int(x)
 	return math.tointeger(x) or x
 end
 
+function load_init_file()
+	local file = io.open(".f", "r")
+	if file then
+		local src = file:read("a")
+		file:close()
+		if not string.match(src, "\n$") then src = src .. "\n" end
+		return src
+	end
+end
+
+function save_init_file(src)
+	local file = assert(io.open(".f", "w"))
+	file:write(src)
+	file:close()
+end
+
 -- Stack
 
 function push(v)
@@ -145,7 +161,7 @@ function next_char()
 end
 
 -- Returns the next symbol from input. Returns nil at end of input.
-function next_symbol(delimiters)
+function next_symbol(delimiters, allow_eof)
 	delimiters = delimiters or "[ \n\t]"
 
 	-- skip leading delimiters
@@ -159,7 +175,10 @@ function next_symbol(delimiters)
 	end
 
 	-- end of file reached?
-	if peek_char() == nil then return nil end
+	if peek_char() == nil then
+		if not allow_eof then runtime_error("unexpected end of input") end
+		return nil
+	end
 
 	-- scan for next delimiter character
 	local start = cur_pos
@@ -173,7 +192,6 @@ end
 
 function next_number()
 	local sym = next_symbol()
-	if sym == nil then runtime_error("unexpected end of input") end
 	local n = parse_number(sym)
 	if n == nil then runtime_error("expected number, got '%s'", sym) end
 	return n
@@ -280,7 +298,7 @@ function execute_input(str)
 	cur_line = 1
 
 	while true do
-		local sym = next_symbol()
+		local sym = next_symbol(nil, true)
 		if sym == nil then break end
 		sym = string.upper(sym)
 		--printf("symbol [%s]", sym)
@@ -538,12 +556,29 @@ dict = {
 		io.write("\n")
 	end,
 	LIST = function()
-		local file = io.open(".f", "r")
-		if file then
-			local src = file:read("a")
-			print(src)
-			file:close()
+		local src = load_init_file()
+		if src then io.write(src) end
+	end,
+	FORGET = function()
+		local name = string.upper(next_symbol())
+		local src = load_init_file()
+		local success = false
+		if src then
+			src = string.upper(src)
+			local pat_name = string.gsub(name, "([^%w])", "%%%1")
+			-- match colon definition
+			local s, e = string.match(src, "():%s+" .. pat_name .. "%s+.-;\n()")
+			-- match variable
+			if s == nil then s, e = string.match(src, "()[%d%.]+%s+VAR%s+" .. pat_name .."\n()") end
+			-- match constant
+			if s == nil then s, e = string.match(src, "()[%d%.]+%s+CONST%s+" .. pat_name .."\n()") end
+			if s and e then
+				src = src:sub(1, s - 1) .. src:sub(e)
+				save_init_file(src)
+				success = true
+			end
 		end
+		if not success then runtime_error("word %s not found", name) end
 	end,
 	IF = function()
 		check_compile_mode("IF")
@@ -660,12 +695,8 @@ dict = {
 }
 
 -- load init file
-local file = io.open(".f", "r")
-if file then
-	local src = file:read("a")
-	file:close()
-	execute_input(src)
-end
+local src = load_init_file()
+if src then execute_input(src) end
 
 -- execute input
 local src = table.concat({...}, " ")
@@ -675,18 +706,18 @@ execute_input(src)
 
 -- store variables and constants
 if #new_definitions > 0 and not load_used then
+	local src = load_init_file() or ""
 	for _, str in ipairs(new_definitions) do
-		local file = assert(io.open(".f", "a"))
-		file:write("\n", str)
-		file:close()
+		src = src .. new_definitions
 	end
+	save_init_file(src)
 end
 
 -- store colon definition
 if colon_pos and not load_used then
-	local file = assert(io.open(".f", "a"))
-	file:write("\n: ", src:sub(colon_pos), " ;\n")
-	file:close()
+	local src = load_init_file() or ""
+	src = src .. ": " .. input:sub(colon_pos) .. " ;\n"
+	save_init_file(src)
 end
 
 -- print results
