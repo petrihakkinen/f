@@ -26,7 +26,6 @@ end
 function runtime_error(...)
 	printf(...)
 
-	-- show error location
 	-- scan backwards one symbol
 	while cur_pos > 1 do
 		cur_pos = cur_pos - 1
@@ -36,7 +35,28 @@ function runtime_error(...)
 		if string.match(input:sub(cur_pos - 1, cur_pos - 1), "%s") then break end
 		cur_pos = cur_pos - 1
 	end
-	print(input)
+
+	-- trim other lines before erroneous error
+	local err_loc = input	
+	for i = cur_pos, 1, -1 do
+		if err_loc:sub(i, i) == '\n' then
+			err_loc = err_loc:sub(i + 1)
+			cur_pos = cur_pos - i
+			break
+		end
+	end
+
+	-- trim other lines after erroneous line
+	err_loc = string.match(err_loc, "(.-)\n") or err_loc
+
+	-- handle tabs
+	for i = 1, cur_pos do
+		if err_loc:sub(i, i) == '\t' then cur_pos = cur_pos + 3 end
+	end
+	err_loc = string.gsub(err_loc, "\t", "    ")
+
+	-- show error location
+	print(err_loc)
 	print(string.rep(" ", cur_pos - 1) .. "^")
 
 	os.exit(-1)
