@@ -4,8 +4,6 @@
 
 - add alias for disabling shell substitution of *
 
-- LIST, R@, LEAVE, UNLOOP
-
-- rename >R -> PUSH, R> -> POP ?
+- LEAVE, UNLOOP
 
 - ,S or something for enclosing strings into dictionary (are space terminated strings ok?)

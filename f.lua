@@ -364,6 +364,10 @@ dict = {
 		local n, addr = pop2()
 		mem[addr] = n
 	end,
+	['+!'] = function()
+		local n, addr = pop2()
+		mem[addr] = mem[addr] + n
+	end,
 	['@'] = function()
 		local addr = pop()
 		push(mem[addr] or 0)
@@ -397,11 +401,14 @@ dict = {
 		emit('ret')
 		compile_mode = false
 	end,
-	['>R'] = function()
+	PUSH = function()
 		r_push(pop())
 	end,
-	['R>'] = function()
+	POP = function()
 		push(r_pop())
+	end,
+	['R@'] = function()
+		push(r_peek(-1))
 	end,
 	CONST = function()
 		local name = next_symbol()
@@ -436,8 +443,10 @@ dict = {
 		end
 	end,
 	DUP = function() push(peek(-1)) end,
+	['2DUP'] = function() push(peek(-2)); push(peek(-2)) end,
 	OVER = function() push(peek(-2)) end,
 	DROP = function() pop() end,
+	['2DROP'] = function() pop2() end,
 	NIP = function() local a, b = pop2(); push(b) end,
 	ROT = function() push(peek(-3)); remove(-4) end,
 	SWAP = function() local a, b = pop2(); push(b); push(a) end,
@@ -516,6 +525,14 @@ dict = {
 		end
 		io.write("\n")
 	end,
+	LIST = function()
+		local file = io.open(".f", "r")
+		if file then
+			local src = file:read("a")
+			print(src)
+			file:close()
+		end
+	end,
 	IF = function()
 		check_compile_mode("IF")
 		-- emit conditional branch
@@ -565,8 +582,8 @@ dict = {
 	DO = function()
 		check_compile_mode("DO")
 		emit('SWAP')
-		emit('>R')	-- limit to return stack
-		emit('>R')	-- loop counter to return stack
+		emit('PUSH')	-- limit to return stack
+		emit('PUSH')	-- loop counter to return stack
 		push(here())
 		push('do')
 	end,

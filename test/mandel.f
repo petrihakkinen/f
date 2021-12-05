@@ -12,9 +12,6 @@ create ascii-table
 
 here ascii-table - const MAX_CHARS ( number of chars in ascii-table )
 
-80 const WIDTH
-40 const HEIGHT
-
 -2.00 const X1
  0.60 const X2
 -1.12 const Y1
@@ -42,16 +39,16 @@ here ascii-table - const MAX_CHARS ( number of chars in ascii-table )
 		1+ ( increment iteration )
 	again ;
 
-: mandel ( -- )
-	HEIGHT 0 do
-		WIDTH 0 do
+: mandel ( width height -- )
+	dup 0 do
+		over 0 do
 			( map to range )
-			i WIDTH 1- / [ X2 X1 - lit ] * X1 +
-			j HEIGHT 1- / [ Y2 Y1 - lit ] * Y1 +
+			over i swap 1- / [ X2 X1 - lit ] * X1 + ( x )
+			over j swap 1- / [ Y2 Y1 - lit ] * Y1 + ( y )
 			mandel-at
 			ascii-table + @ emit
 		loop
 		cr
-	loop ;
+	loop 2drop ;
 
-mandel
+80 40 mandel
