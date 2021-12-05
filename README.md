@@ -144,7 +144,7 @@ The following letters are used to denote values on the stack:
 | -          | ( n n - n )        | Subtract two values                                                 |
 | *          | ( n n - n )        | Multiply two values                                                 |
 | /          | ( n1 n2 - n )      | Divide n1 by n2                                                     |
-| //         | ( n1 n2 - n )      | Divide n1 by n2 and convert the result to integer                   |
+| //         | ( n1 n2 - n )      | Divide n1 by n2 and convert the result to integer using FLOOR       |
 | %          | ( n n - n )        | Compute the remainder of division                                   |
 | ^          | ( n1 n2 - n )      | Raise n1 to the power of n2                                         |
 | 1+         | ( n - n )          | Increment value by 1                                                |
@@ -208,7 +208,7 @@ The following letters are used to denote values on the stack:
 | !          | ( n addr - )       | Store value at address                                            |
 | +!         | ( n addr - )       | Increment value in address by n                                   |
 
-### Compilation
+### Compilation and Execution
 
 | Word            | Stack              | Description                                                         |
 | --------------- | ------------------ | ------------------------------------------------------------------- |
@@ -220,7 +220,7 @@ The following letters are used to denote values on the stack:
 | ]               | ( - )              | Change from interpreter to compile state                            |
 | CREATE `<name>` | ( - )              | Add new (empty) word to dictionary with name `<name>`               |
 | CONST `<name>`  | ( n - )            | Capture value to a new word with name `<name>`                      |
-| VAR `<name>`    | ( n - )            | Create new variable with name `<name>` and with initial value from stack |
+| VAR `<name>`    | ( n - )            | Create new variable with name `<name>` and with initial value n     |
 | ASCII `<char>`  | ( - (n) )          | Emit literal containing the ASCII code of the following symbol      |
 | CHARS `<string>` | ( - )             | Enclose a space-terminated string into output dictionary            |
 | HERE            | ( - n )            | Push the address of the next free location in output dictionary     |
@@ -228,9 +228,9 @@ The following letters are used to denote values on the stack:
 | VLIST           | ( - )              | Print the names of all defined words                                |
 | LIST            | ( - )              | Print the contents of init file                                     |
 | FORGET `<name>` | ( - )              | Remove all definitions of a word from init file                     |
-| LIT             | ( n - )            | Emit a value from data stack to output dictionary                   |
+| LIT             | ( n - )            | Emit value from data stack to output dictionary                     |
 
-### Built-in Constants and Variables
+### Constants and Variables
 
 | Word            | Stack              | Description                                                         |
 | --------------- | ------------------ | ------------------------------------------------------------------- |
