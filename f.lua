@@ -3,7 +3,6 @@
 local input						-- input buffer
 local cur_pos = 1				-- current position in input buffer
 local cur_line = 1				-- not really used
-local colon_pos					-- position of the previous colon in input buffer
 local compile_mode = false		-- interpret or compile mode?
 local stack = {}
 local return_stack = {}
@@ -77,6 +76,8 @@ function int(x)
 	return math.tointeger(x) or x
 end
 
+-- Init File
+
 function load_init_file()
 	local file = io.open(".f", "r")
 	if file then
@@ -91,6 +92,39 @@ function save_init_file(src)
 	local file = assert(io.open(".f", "w"))
 	file:write(src)
 	file:close()
+end
+
+function find_definition(src, name)
+	src = string.upper(src)
+
+	local pat_name = string.gsub(name, "([^%w])", "%%%1")
+
+	-- match colon definition
+	local s, e = string.match(src, "():%s+" .. pat_name .. "%s+.-;\n()")
+	if s and e then return s, e, "colon" end
+
+	-- match variable
+	s, e = string.match(src, "()[%d%.]+%s+VAR%s+" .. pat_name .."\n()")
+	if s and e then return s, e, "var" end
+
+	-- match constant
+	s, e = string.match(src, "()[%d%.]+%s+CONST%s+" .. pat_name .."\n()")
+	if s and e then return s, e, "const" end
+end
+
+function forget(name)
+	local src = load_init_file()
+	if src == nil then return false end
+
+	local s, e = find_definition(src, name)
+
+	if s and e then
+		src = src:sub(1, s - 1) .. src:sub(e)
+		save_init_file(src)
+		return true
+	end
+
+	return false
 end
 
 -- Stack
@@ -408,7 +442,7 @@ dict = {
 	end,
 	[':'] = function()
 		runtime_assert(not compile_mode, ": cannot be used inside colon definition")
-		colon_pos = cur_pos
+		local start = cur_pos
 		local name = string.upper(next_symbol())
 		local addr = here()
 		compile_mode = true
@@ -422,6 +456,11 @@ dict = {
 				execute(addr)
 			end
 		end
+
+		if new_definitions then
+			-- TODO: this does not take into account that interpreted code may be following a colon definition
+			table.insert(new_definitions, { name = name, type = "colon", src = ": " .. input:sub(start) .. " ;\n" })
+		end
 	end,
 	[';'] = function()
 		check_compile_mode(";")
@@ -430,9 +469,10 @@ dict = {
 	end,
 	CONST = function()
 		local name = next_symbol()
+		local uname = string.upper(name)
 		local value = pop()
 
-		dict[string.upper(name)] = function()
+		dict[uname] = function()
 			if compile_mode then
 				emit('lit')
 				emit(value)
@@ -442,22 +482,23 @@ dict = {
 		end
 
 		if new_definitions then
-			table.insert(new_definitions, value .. " const " .. name .. "\n")
+			table.insert(new_definitions, { name = uname, type = "const", src = value .. " const " .. name .. "\n" })
 		end
 	end,
 	VAR = function()
 		runtime_assert(not compile_mode, "VAR cannot be used inside colon definition")		
 		local name = next_symbol()
+		local uname = string.upper(name)
 		local addr = here()
 		local value = pop()
 		emit(value)
 
-		dict[string.upper(name)] = function()
+		dict[uname] = function()
 			push(addr)
 		end
 
 		if new_definitions then
-			table.insert(new_definitions, value .. " var " .. name .. "\n")
+			table.insert(new_definitions, { name = uname, type = "var", src = value .. " var " .. name .. "\n" })
 		end
 	end,
 	DUP = function() push(peek(-1)) end,
@@ -558,24 +599,7 @@ dict = {
 	end,
 	FORGET = function()
 		local name = string.upper(next_symbol())
-		local src = load_init_file()
-		local success = false
-		if src then
-			src = string.upper(src)
-			local pat_name = string.gsub(name, "([^%w])", "%%%1")
-			-- match colon definition
-			local s, e = string.match(src, "():%s+" .. pat_name .. "%s+.-;\n()")
-			-- match variable
-			if s == nil then s, e = string.match(src, "()[%d%.]+%s+VAR%s+" .. pat_name .."\n()") end
-			-- match constant
-			if s == nil then s, e = string.match(src, "()[%d%.]+%s+CONST%s+" .. pat_name .."\n()") end
-			if s and e then
-				src = src:sub(1, s - 1) .. src:sub(e)
-				save_init_file(src)
-				success = true
-			end
-		end
-		if not success then runtime_error("word %s not found", name) end
+		runtime_assert(forget(name), string.format("word %s not found", name))
 	end,
 	IF = function()
 		check_compile_mode("IF")
@@ -697,24 +721,30 @@ if src then execute_input(src) end
 
 -- execute input
 local src = table.concat({...}, " ")
-colon_pos = nil
 new_definitions = {}
 execute_input(src)
 
--- store variables and constants
+-- store new definitions (forget previous definitions)
 if #new_definitions > 0 and not load_used then
 	local src = load_init_file() or ""
-	for _, str in ipairs(new_definitions) do
-		src = src .. new_definitions
-	end
-	save_init_file(src)
-end
+	local success = true
 
--- store colon definition
-if colon_pos and not load_used then
-	local src = load_init_file() or ""
-	src = src .. ": " .. input:sub(colon_pos) .. " ;\n"
-	save_init_file(src)
+	for _, def in ipairs(new_definitions) do
+		local _, _, existing_type = find_definition(src, def.name)
+
+		if existing_type then
+			if existing_type == def.type then
+				forget(def.name)
+				src = load_init_file() or ""
+			else
+				printf("WARNING! Conflicting definition for %s found. Init file not updated! (use FORGET to remove the definition)", def.name)
+				success = false
+			end
+		end
+
+		src = src .. def.src
+	end
+	if success then save_init_file(src) end
 end
 
 -- print results

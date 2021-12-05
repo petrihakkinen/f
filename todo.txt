@@ -1,6 +1,3 @@
 - allow using control flow words outside colon definitions?
 
 - LEAVE, UNLOOP, ALLOT
-
-- forget previous definitions automatically
-	- error if word type mismatches (FORGET previous definition first)
