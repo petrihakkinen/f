@@ -262,6 +262,7 @@ function format_number(n)
 
 	local digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	local result = ""
+	local sign = ""
 
 	if n == 0 then return "0" end
 
@@ -281,17 +282,17 @@ function format_number(n)
 			local num_digits = 8
 			n = (1 << num_digits * 4) - n
 		else
-			result = "-"
+			sign = "-"
 		end			
 	end
 
 	while n > 0 do
 		local d = n % base
-		result = result .. digits:sub(d + 1, d + 1)
+		result = digits:sub(d + 1, d + 1) .. result
 		n = n // base
 	end
 
-	return string.reverse(result)
+	return sign .. result
 end
 
 -- Parses number from a string using current numeric base.
